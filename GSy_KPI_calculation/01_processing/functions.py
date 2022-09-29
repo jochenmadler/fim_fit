@@ -161,45 +161,74 @@ def total_cost(homepath_usecase):
 
     return [df, df_germany, df_mms, df_regions, df_ecs, df_members]
 
+def share_renewable_helper(file_path, dict_out):
+    df = pd.read_csv(file_path).drop(['creation_time', 'matching_requirements', 'rate [ct./kWh]'], axis=1)
+    df.seller = [i.lower().replace('_', '-') for i in df.seller]
+    df.buyer = [i.lower().replace('_', '-') for i in df.buyer]
+    # p: parent entity name
+    p = file_path.split('\\')[-1].split('-trades.csv')[0]
+    # special case use case 4:
+    if 'member' in p:
+        p = p.replace('member', 'mm')
+    # get children
+    sellers = [i for i in df.seller.unique() if 'mm-' not in i and i != p]
+    buyers = [i for i in df.buyer.unique() if 'mm-' not in i and i != p]
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=FutureWarning)
+        children = pd.Series(sellers + buyers).unique()
+    df.set_index(['slot'], inplace=True)
+    for slot, df_slot in df.groupby(level=0):
+        if len(dict_out.keys()) < 1 or slot not in dict_out.keys():
+            dict_out[slot] = dict()
+        # p: parent entity name -> special case for highest level: Germany
+        if 'germany' in p:
+            p_to_cs = df_slot[df_slot.seller.str.contains(p) &
+                             (~df_slot.buyer.str.contains(p))]['energy [kWh]'].sum()
+            cs_to_p = df_slot[(~df_slot.seller.str.contains(p)) &
+                              (df_slot.buyer.str.contains(p))]['energy [kWh]'].sum()
+            net_p_to_cs = p_to_cs - cs_to_p
+            p_share_grey_electricity = net_p_to_cs / p_to_cs if net_p_to_cs > 0 else 0
+            dict_out[slot][p] = p_share_grey_electricity
+        # c: children entity name
+        for c in children:
+            # net energy child bought from parent
+            p_to_c = df_slot[df_slot.seller.str.contains(p) &
+                               (df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
+            c_to_p = df_slot[df_slot.seller.str.contains(c) &
+                               (df_slot.buyer.str.contains(p))]['energy [kWh]'].sum()
+            net_p_to_c = p_to_c - c_to_p
+            # net energy child bought from other children
+            cs_to_c = df_slot[(~df_slot.seller.str.contains(p)) &
+                                (~df_slot.seller.str.contains(c)) &
+                                (df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
+            c_to_cs = df_slot[(df_slot.seller.str.contains(c)) &
+                                (~df_slot.buyer.str.contains(p)) &
+                                (~df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
+            net_cs_to_c = cs_to_c - c_to_cs
+            # children's share grey electricity
+            if net_p_to_c > 0 and net_cs_to_c <= 0:
+                c_share_grey_electricity = 1 if p not in dict_out[slot].keys() else dict_out[slot][p]
+            elif net_p_to_c > 0 and net_cs_to_c > 0:
+                p_share_grey_electricity = 1 if p not in dict_out[slot].keys() else dict_out[slot][p]
+                c_share_grey_electricity = p_share_grey_electricity * (net_p_to_c / (net_p_to_c + net_cs_to_c))
+            else:
+                c_share_grey_electricity = 0
+            # prevent overwriting of assets that are used in multiple houses (e.g. ev-non-commuter)
+            c = c if 'id' not in c else p+'_'+c
+            dict_out[slot][c] = c_share_grey_electricity
+
+    return dict_out
+
 
 def share_renewables(homepath_usecase):
-    os.chdir(homepath_usecase)
-    # obtain trades with mm -> might need adaption if mm on multiple levels -> df_list
-    for file in os.listdir():
-        if 'trades' in file:
-            all_trades_df = pd.read_csv(file).iloc[:, np.r_[0, 3:6]]
-    # filter out trades where mm is selling to an entity other than itself
-    trades = all_trades_df[(all_trades_df.seller.isin([seller for seller in all_trades_df.seller if 'MM' in seller])) &
-                           (~all_trades_df.buyer.isin([buyer for buyer in all_trades_df.buyer if 'MM' in buyer]))]
-    # obtain list of buyers for which to calculate share of renewable energy -> might need to be appended to greater list
-    buyers = trades.buyer.unique()
-    # obtain kpis for all members below mm level
-    os.chdir('aggregated_results/')
-    df_kpi = pd.read_json('kpi.json').T.iloc[:, :-6]
-    # filter out entities for which to calculate share of renewables
-    df_kpi_buyers = df_kpi[df_kpi.name.isin(buyers)]
-    total_imported_from_mm_list, total_renewable_consumed_list, share_renewable_consumed_list = [], [], []
-    # for each buyer, sum up all energy that was imported by mm
-    pd.set_option('display.float_format', str)
-    for i in range(len(df_kpi_buyers)):
-        buyer = df_kpi_buyers.name[i]
-        # calculate kpis
-        total_consumed_kw = df_kpi_buyers[df_kpi_buyers.name == buyer].total_energy_demanded_wh[0]
-        total_self_consumed_kw = df_kpi_buyers[df_kpi_buyers.name == buyer].total_self_consumption_wh[0]
-        total_imported_kw = total_consumed_kw - total_self_consumed_kw
-        total_imported_from_mm_kw = trades[trades.buyer == buyer]['energy [kWh]'].sum() * 1000
-        total_renewable_consumed_kw = total_self_consumed_kw + total_imported_kw - total_imported_from_mm_kw
-        share_renewable_consumed = total_renewable_consumed_kw / total_consumed_kw
-        # append to lists
-        total_imported_from_mm_list.append(total_imported_from_mm_kw)
-        total_renewable_consumed_list.append(total_renewable_consumed_kw)
-        share_renewable_consumed_list.append(share_renewable_consumed)
-    # append to df_kpi_buyers (suppress warnings)
-    with warnings.catch_warnings():
-        warnings.simplefilter('ignore')
-        df_kpi_buyers['total_energy_imported_from_mm_wh'] = total_imported_from_mm_list
-        df_kpi_buyers['total_renewable_energy_consumption_wh'] = total_renewable_consumed_list
-        df_kpi_buyers['share_renewables_consumption'] = share_renewable_consumed_list
-    os.chdir(homepath_usecase)
+    dict_out = dict()
+    files = []
+    for root, dir, file in os.walk(top=os.getcwd(), topdown=True):
+        files += [os.path.join(root, f) for f in file if 'trades.csv' in f]
+    for file in files:
+        dict_out = share_renewable_helper(file, dict_out)
+    df_out = pd.DataFrame.from_dict(dict_out, orient='index')
 
-    return df_kpi_buyers
+    # TODO: Multiply share grey energy with electricity mix to obtain share renewable
+
+    return df_out
