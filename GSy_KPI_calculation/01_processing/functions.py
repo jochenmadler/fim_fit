@@ -23,7 +23,7 @@ def avg_price_regions(homepath_usecase):
     if 'grid' in os.listdir():
         os.chdir('grid/')
     # extract .csv files
-    for file in os.listdir():
+    for file in [file for file in os.listdir() if 'MACOSX' not in file]:
         if '.csv' in file and not any(x in file for x in ('bids', 'offers', 'trades', 'mm')):
             df_temp = pd.read_csv(file).iloc[:,np.r_[:2,-1]]
             region = int(file.split(".")[0].split("-")[-1])
