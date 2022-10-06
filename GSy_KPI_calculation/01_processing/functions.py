@@ -44,10 +44,10 @@ def avg_price_ecs(homepath_usecase):
     if 'grid' in os.listdir():
         os.chdir('grid/')
     # iterate over region folders
-    for region in [i for i in os.listdir() if '.csv' not in i]:
+    for region in [i for i in os.listdir() if '.csv' not in i if 'MACOSX' not in i]:
             os.chdir(region)
             # iterate over ecs
-            for ecs in os.listdir():
+            for ecs in [i for i in os.listdir() if 'MACOSX' not in i]:
                 if '.csv' in ecs and not any(x in ecs for x in ('bids', 'offers', 'trades')):
                     # caveat use case 4: 'region-1-ec0.csv' is named 'member-region-1-ec0.csv' -> skip 'member'
                     if 'member' in ecs:
