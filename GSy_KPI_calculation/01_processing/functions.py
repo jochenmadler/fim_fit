@@ -114,7 +114,7 @@ def avg_price_assets(homepath_usecase):
 def get_kpi_dict(homepath, kpi):
     os.chdir(homepath)
     kpi_dict = dict()
-    for usecase in os.listdir():
+    for usecase in [file for file in os.listdir() if 'MACOSX' not in file]:
         nr = [i for i in usecase if any(str(x) in i for x in range(5))]
         if len(nr) < 1:
             continue
