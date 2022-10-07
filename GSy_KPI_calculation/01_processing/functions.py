@@ -158,11 +158,11 @@ def avg_price_ecs(homepath_usecase):
     return avg_price_ecs
 
 
-def avg_p_assets_helper(month_subset_paths):
+def avg_p_members_helper(month_subset_paths):
     dfs_temp = []
     for i in month_subset_paths:
         df_temp = pd.read_csv(i).iloc[:, np.r_[:2, -1]]
-        asset_name = i.split('\\')[-1].split('.csv')[0].replace('-','_')
+        asset_name = i.split('\\')[-1].split('.csv')[0].replace('-', '_')
         df_temp.columns = df_temp.columns.to_list()[:1] + [f'{asset_name}_' + col for col in df_temp.columns[1:]]
         dfs_temp.append(df_temp)
     # merge dfs
@@ -173,7 +173,7 @@ def avg_p_assets_helper(month_subset_paths):
     return avg_price_assets
 
 
-def avg_p_assets(use_case_home_path):
+def avg_p_members(use_case_home_path):
     # get all relevant file paths
     all_filepaths, all_filenames = [], []
     for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
@@ -187,7 +187,7 @@ def avg_p_assets(use_case_home_path):
     l = len(all_filenames)
     for i in range(nr_months):
         month_subset_paths = all_filepaths[int(l / nr_months) * i: int(l / nr_months) * (i + 1)]
-        months_dfs.append(avg_p_assets_helper(month_subset_paths))
+        months_dfs.append(avg_p_members_helper(month_subset_paths))
     # concatenate month_dfs, sorted by ascending date
 
     return pd.concat(months_dfs).sort_values(by='slot')
@@ -260,6 +260,41 @@ def get_kpi_dict(homepath, kpi):
         kpi_dict[f'{usecase}'] = usecase_dict
         os.chdir(homepath)
     return kpi_dict
+
+
+def tot_cost_helper(use_case_home_path):
+    # get all relevant file paths
+    all_filepaths, all_filenames = [], []
+    for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
+        all_filepaths += [os.path.join(root, f) for f in file if 'cumulative_bills.json' in f]
+    # read in all months' files, group by agent_name and sum up total cost
+    months_dfs = []
+    for i in all_filepaths:
+        df_month = pd.read_json(i, orient='index')[['name', 'total']]
+        months_dfs.append(df_month)
+
+    return pd.concat(months_dfs).groupby('name', as_index=False).sum()
+
+
+def tot_cost(use_case_home_path):
+    # obtain df with all agents' total costs
+    df = tot_cost_helper(use_case_home_path)
+    # filter out agent category subsets and add to dict_out
+    dict_out = dict()
+    names = df.name
+    dict_out['germany'] = df[df.name.isin([name for name in names if name in 'Germany'])]
+    dict_out['mm'] = df[df.name.isin([name for name in names if 'MM' in name])]
+    dict_out['region'] = df[df.name.isin([name for name in names if name in [f'Region_{i}' for i in range(1, 7)]])]
+    dict_out['ec'] = df[
+        df.name.isin([name for name in names if name in [f'Region_{i}_EC{j}' for i in range(1, 7) for j in range(5)]])]
+    dict_out['member'] = df[~df.name.isin(
+        [name for name in names if any(x in name for x in ('Germany', 'ID', 'MM', 'Member'))]) & df.name.isin(
+        [name for name in names if 'house' in name])]
+    dict_out['asset'] = df[
+        ~df.name.isin([name for name in names if any(x in name for x in ('Germany', 'MM', 'Member'))]) & df.name.isin(
+            [name for name in names if any(x in name for x in ('ID', 'Load'))])]
+
+    return dict_out
 
 
 def total_cost(homepath_usecase):
