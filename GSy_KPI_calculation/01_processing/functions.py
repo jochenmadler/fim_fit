@@ -7,12 +7,33 @@ import warnings
 
 def avg_price_ger(homepath_usecase):
     os.chdir(homepath_usecase)
-    avg_price_ger = pd.read_csv('germany.csv').iloc[:,np.r_[:2,-1]]
+    avg_price_ger = pd.read_csv('germany.csv').iloc[:, np.r_[:2, -1]]
     avg_price_ger.columns = avg_price_ger.columns.to_list()[:1] + [f'germany_' + col for col in
-                                                       avg_price_ger.columns[1:]]
+                                                                   avg_price_ger.columns[1:]]
     os.chdir(homepath_usecase)
 
     return avg_price_ger
+
+
+def avg_p_germany_helper(file_path):
+    avg_price_ger = pd.read_csv(file_path).iloc[:, np.r_[:2, -1]]
+    avg_price_ger.columns = avg_price_ger.columns.to_list()[:1] + [f'germany_' + col for col in
+                                                                   avg_price_ger.columns[1:]]
+
+    return avg_price_ger
+
+
+def avg_p_germany(use_case_home_path):
+    # get all relevant file paths
+    all_filepaths, all_filenames = [], []
+    for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
+        all_filepaths += [os.path.join(root, f) for f in file if 'germany.csv' in f if 'mm' not in f]
+        all_filenames += [f for f in file if 'germany.csv' in f if 'mm' not in f]
+    # concatenate month_dfs, sorted by ascending date
+    months_dfs = []
+    for file_path in all_filepaths:
+        months_dfs.append(avg_p_germany_helper(file_path))
+    return pd.concat(months_dfs).sort_values(by='slot')
 
 
 def avg_price_regions(homepath_usecase):
@@ -25,7 +46,7 @@ def avg_price_regions(homepath_usecase):
     # extract .csv files
     for file in [file for file in os.listdir() if 'MACOSX' not in file]:
         if '.csv' in file and not any(x in file for x in ('bids', 'offers', 'trades', 'mm')):
-            df_temp = pd.read_csv(file).iloc[:,np.r_[:2,-1]]
+            df_temp = pd.read_csv(file).iloc[:, np.r_[:2, -1]]
             region = int(file.split(".")[0].split("-")[-1])
             df_temp.columns = df_temp.columns.to_list()[:1] + [f'region{region}_' + col for col in df_temp.columns[1:]]
             dfs_temp.append(df_temp)
@@ -34,6 +55,75 @@ def avg_price_regions(homepath_usecase):
     os.chdir(homepath_usecase)
 
     return avg_price_regions
+
+
+def avg_p_regions_helper(month_subset_paths):
+    dfs_temp = []
+    for i in month_subset_paths:
+        df_temp = pd.read_csv(i).iloc[:, np.r_[:2, -1]]
+        region = i.split('\\')[-1].split('.')[0].split('-')[-1]
+        df_temp.columns = df_temp.columns.to_list()[:1] + [f'region{region}_' + col for col in df_temp.columns[1:]]
+        dfs_temp.append(df_temp)
+    # merge dfs
+    avg_price_regions = func.reduce(lambda left, right: pd.merge(left, right, on=dfs_temp[0].columns[0]), dfs_temp)
+
+    return avg_price_regions
+
+
+def avg_p_regions(use_case_home_path):
+    # get all relevant file paths
+    all_filepaths, all_filenames = [], []
+    for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
+        all_filepaths += [os.path.join(root, f) for f in file if all(x in f for x in ('region', '.csv')) if
+                          not any(x in f for x in ('trades', 'bids', 'offers', 'ec', 'member', 'id', 'industry'))]
+        all_filenames += [f for f in file if all(x in f for x in ('region', '.csv')) if
+                          not any(x in f for x in ('trades', 'bids', 'offers', 'ec', 'member', 'id', 'industry'))]
+    # for each month, construct subset_df
+    months_dfs = []
+    nr_months = all_filenames.count(all_filenames[0])
+    l = len(all_filenames)
+    for i in range(nr_months):
+        month_subset_paths = all_filepaths[int(l / nr_months) * i: int(l / nr_months) * (i + 1)]
+        months_dfs.append(avg_p_regions_helper(month_subset_paths))
+    # concatenate month_dfs, sorted by ascending date
+
+    return pd.concat(months_dfs).sort_values(by='slot')
+
+
+def avg_p_ecs_helper(month_subset_paths):
+    dfs_temp = []
+    for i in month_subset_paths:
+        df_temp = pd.read_csv(i).iloc[:, np.r_[:2, -1]]
+        region, ec = i.split('\\')[-1].split('.')[0].split('-ec')
+        region = region.replace('-', '_')
+        df_temp.columns = df_temp.columns.to_list()[:1] + [f'{region}_ec{ec}_' + col for col in df_temp.columns[1:]]
+        dfs_temp.append(df_temp)
+    # merge dfs
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=FutureWarning)
+        avg_price_ecs = func.reduce(lambda left, right: pd.merge(left, right, on=dfs_temp[0].columns[0]), dfs_temp)
+
+        return avg_price_ecs
+
+
+def avg_p_ecs(use_case_home_path):
+    # get all relevant file paths
+    all_filepaths, all_filenames = [], []
+    for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
+        all_filepaths += [os.path.join(root, f) for f in file if all(x in f for x in ('ec', '.csv')) if
+                          not any(x in f for x in ('trades', 'bids', 'offers', 'house', 'member', 'id', 'industry'))]
+        all_filenames += [f for f in file if all(x in f for x in ('ec', '.csv')) if
+                          not any(x in f for x in ('trades', 'bids', 'offers', 'house', 'member', 'id', 'industry'))]
+    # for each month, construct subset_df
+    months_dfs = []
+    nr_months = all_filenames.count(all_filenames[0])
+    l = len(all_filenames)
+    for i in range(nr_months):
+        month_subset_paths = all_filepaths[int(l / nr_months) * i: int(l / nr_months) * (i + 1)]
+        months_dfs.append(avg_p_ecs_helper(month_subset_paths))
+    # concatenate month_dfs, sorted by ascending date
+
+    return pd.concat(months_dfs).sort_values(by='slot')
 
 
 def avg_price_ecs(homepath_usecase):
@@ -45,20 +135,20 @@ def avg_price_ecs(homepath_usecase):
         os.chdir('grid/')
     # iterate over region folders
     for region in [i for i in os.listdir() if '.csv' not in i if 'MACOSX' not in i]:
-            os.chdir(region)
-            # iterate over ecs
-            for ecs in [i for i in os.listdir() if 'MACOSX' not in i]:
-                if '.csv' in ecs and not any(x in ecs for x in ('bids', 'offers', 'trades')):
-                    # caveat use case 4: 'region-1-ec0.csv' is named 'member-region-1-ec0.csv' -> skip 'member'
-                    if 'member' in ecs:
-                        region, ec = ecs.split('.')[0].split('-')[2], ecs.split('.')[0].split('-')[-1]
-                    else:
-                        region, ec = ecs.split('.')[0].split('-')[1], ecs.split('.')[0].split('-')[-1]
-                    df_temp = pd.read_csv(ecs).iloc[:,np.r_[:2,-1]]
-                    df_temp.columns = df_temp.columns.to_list()[:1] + [f'region{region}_{ec}_' + col for col in
-                                                                       df_temp.columns[1:]]
-                    dfs_temp.append(df_temp)
-            os.chdir('..')
+        os.chdir(region)
+        # iterate over ecs
+        for ecs in [i for i in os.listdir() if 'MACOSX' not in i]:
+            if '.csv' in ecs and not any(x in ecs for x in ('bids', 'offers', 'trades')):
+                # caveat use case 4: 'region-1-ec0.csv' is named 'member-region-1-ec0.csv' -> skip 'member'
+                if 'member' in ecs:
+                    region, ec = ecs.split('.')[0].split('-')[2], ecs.split('.')[0].split('-')[-1]
+                else:
+                    region, ec = ecs.split('.')[0].split('-')[1], ecs.split('.')[0].split('-')[-1]
+                df_temp = pd.read_csv(ecs).iloc[:, np.r_[:2, -1]]
+                df_temp.columns = df_temp.columns.to_list()[:1] + [f'region{region}_{ec}_' + col for col in
+                                                                   df_temp.columns[1:]]
+                dfs_temp.append(df_temp)
+        os.chdir('..')
     # merge dfs
     with warnings.catch_warnings():
         warnings.simplefilter(action='ignore', category=FutureWarning)
@@ -66,6 +156,41 @@ def avg_price_ecs(homepath_usecase):
     os.chdir(homepath_usecase)
 
     return avg_price_ecs
+
+
+def avg_p_assets_helper(month_subset_paths):
+    dfs_temp = []
+    for i in month_subset_paths:
+        df_temp = pd.read_csv(i).iloc[:, np.r_[:2, -1]]
+        asset_name = i.split('\\')[-1].split('.csv')[0].replace('-','_')
+        df_temp.columns = df_temp.columns.to_list()[:1] + [f'{asset_name}_' + col for col in df_temp.columns[1:]]
+        dfs_temp.append(df_temp)
+    # merge dfs
+    with warnings.catch_warnings():
+        warnings.simplefilter(action='ignore', category=FutureWarning)
+        avg_price_assets = func.reduce(lambda left, right: pd.merge(left, right, on=dfs_temp[0].columns[0]), dfs_temp)
+
+    return avg_price_assets
+
+
+def avg_p_assets(use_case_home_path):
+    # get all relevant file paths
+    all_filepaths, all_filenames = [], []
+    for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
+        all_filepaths += [os.path.join(root, f) for f in file if all(x in f for x in ('house', '.csv')) if
+                          not any(x in f for x in ('trades', 'bids', 'offers', 'id', 'load', 'ev', 'mm', 'member'))]
+        all_filenames += [f for f in file if all(x in f for x in ('house', '.csv')) if
+                          not any(x in f for x in ('trades', 'bids', 'offers', 'id', 'load', 'ev', 'mm', 'member'))]
+    # for each month, construct subset_df
+    months_dfs = []
+    nr_months = all_filenames.count(all_filenames[0])
+    l = len(all_filenames)
+    for i in range(nr_months):
+        month_subset_paths = all_filepaths[int(l / nr_months) * i: int(l / nr_months) * (i + 1)]
+        months_dfs.append(avg_p_assets_helper(month_subset_paths))
+    # concatenate month_dfs, sorted by ascending date
+
+    return pd.concat(months_dfs).sort_values(by='slot')
 
 
 def avg_price_assets(homepath_usecase):
@@ -114,10 +239,7 @@ def avg_price_assets(homepath_usecase):
 def get_kpi_dict(homepath, kpi):
     os.chdir(homepath)
     kpi_dict = dict()
-    for usecase in [file for file in os.listdir() if 'MACOSX' not in file]:
-        nr = [i for i in usecase if any(str(x) in i for x in range(5))]
-        if len(nr) < 1:
-            continue
+    for usecase in [file for file in os.listdir() if 'MACOSX' not in file if 'case' in file.lower()]:
         os.chdir(usecase)
         if kpi == 1:
             usecase_dict = {
@@ -135,7 +257,7 @@ def get_kpi_dict(homepath, kpi):
                 'ecs': total_cost_list[4],
                 'other_assets': total_cost_list[5]
             }
-        kpi_dict[f'usecase_{nr[0]}'] = usecase_dict
+        kpi_dict[f'{usecase}'] = usecase_dict
         os.chdir(homepath)
     return kpi_dict
 
@@ -161,6 +283,7 @@ def total_cost(homepath_usecase):
 
     return [df, df_germany, df_mms, df_regions, df_ecs, df_members]
 
+
 def share_renewable_helper(file_path, dict_out):
     df = pd.read_csv(file_path).drop(['creation_time', 'matching_requirements', 'rate [ct./kWh]'], axis=1)
     df.seller = [i.lower().replace('_', '-') for i in df.seller]
@@ -183,7 +306,7 @@ def share_renewable_helper(file_path, dict_out):
         # p: parent entity name -> special case for highest level: Germany
         if 'germany' in p:
             p_to_cs = df_slot[df_slot.seller.str.contains(p) &
-                             (~df_slot.buyer.str.contains(p))]['energy [kWh]'].sum()
+                              (~df_slot.buyer.str.contains(p))]['energy [kWh]'].sum()
             cs_to_p = df_slot[(~df_slot.seller.str.contains(p)) &
                               (df_slot.buyer.str.contains(p))]['energy [kWh]'].sum()
             net_p_to_cs = p_to_cs - cs_to_p
@@ -193,17 +316,17 @@ def share_renewable_helper(file_path, dict_out):
         for c in children:
             # net energy child bought from parent
             p_to_c = df_slot[df_slot.seller.str.contains(p) &
-                               (df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
+                             (df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
             c_to_p = df_slot[df_slot.seller.str.contains(c) &
-                               (df_slot.buyer.str.contains(p))]['energy [kWh]'].sum()
+                             (df_slot.buyer.str.contains(p))]['energy [kWh]'].sum()
             net_p_to_c = p_to_c - c_to_p
             # net energy child bought from other children
             cs_to_c = df_slot[(~df_slot.seller.str.contains(p)) &
-                                (~df_slot.seller.str.contains(c)) &
-                                (df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
+                              (~df_slot.seller.str.contains(c)) &
+                              (df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
             c_to_cs = df_slot[(df_slot.seller.str.contains(c)) &
-                                (~df_slot.buyer.str.contains(p)) &
-                                (~df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
+                              (~df_slot.buyer.str.contains(p)) &
+                              (~df_slot.buyer.str.contains(c))]['energy [kWh]'].sum()
             net_cs_to_c = cs_to_c - c_to_cs
             # children's share grey electricity
             if net_p_to_c > 0 and net_cs_to_c <= 0:
@@ -214,7 +337,7 @@ def share_renewable_helper(file_path, dict_out):
             else:
                 c_share_grey_electricity = 0
             # prevent overwriting of assets that are used in multiple houses (e.g. ev-non-commuter)
-            c = c if 'id' not in c else p+'_'+c
+            c = c if 'id' not in c else p + '_' + c
             dict_out[slot][c] = c_share_grey_electricity
 
     return dict_out
