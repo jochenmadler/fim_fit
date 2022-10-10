@@ -4,6 +4,7 @@ import pandas as pd
 import functools as func
 import warnings
 
+
 def avg_p_germany_helper(file_path):
     avg_price_ger = pd.read_csv(file_path).iloc[:, np.r_[:2, -1]]
     avg_price_ger.columns = avg_price_ger.columns.to_list()[:1] + [f'germany_' + col for col in
@@ -165,7 +166,6 @@ def avg_p_members(use_case_home_path):
     return
 
 
-
 def get_kpi_dict(homepath, kpi):
     os.chdir(homepath)
     kpi_dict = dict()
@@ -227,12 +227,7 @@ def tot_cost(use_case_home_path):
     return dict_out
 
 
-def share_renewable_helper(file_path, dict_out):
-    df = pd.read_csv(file_path).drop(['creation_time', 'matching_requirements', 'rate [ct./kWh]'], axis=1)
-    df.seller = [i.lower().replace('_', '-') for i in df.seller]
-    df.buyer = [i.lower().replace('_', '-') for i in df.buyer]
-    # p: parent entity name
-    p = file_path.split('\\')[-1].split('-trades.csv')[0]
+def share_renewable_helper(dict_out, df, p):
     # special case use case 4:
     if 'member' in p:
         p = p.replace('member', 'mm')
@@ -286,15 +281,25 @@ def share_renewable_helper(file_path, dict_out):
     return dict_out
 
 
-def share_renewables(homepath_usecase):
+def share_renewables(use_case_home_path):
     dict_out = dict()
-    files = []
-    for root, dir, file in os.walk(top=os.getcwd(), topdown=True):
-        files += [os.path.join(root, f) for f in file if 'trades.csv' in f]
-    for file in files:
-        dict_out = share_renewable_helper(file, dict_out)
-    df_out = pd.DataFrame.from_dict(dict_out, orient='index')
+    # get all relevant filepaths
+    all_filepaths, all_filenames = [], []
+    for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
+        all_filepaths += [os.path.join(root, f) for f in file if 'trades.csv' in f]
+        all_filenames += [f for f in file if 'trades.csv' in f]
+    # for each agent, construct subset_df and hand over to share_renewables_helper
+    nr_months, l = all_filenames.count(all_filenames[0]), len(all_filenames)
+    for i in range(int(l / nr_months)):
+        agent_dfs = []
+        agent_all_filepaths = all_filepaths[i::int(l / nr_months)]
+        for f in agent_all_filepaths:
+            df = pd.read_csv(f).drop(['creation_time', 'matching_requirements', 'rate [ct./kWh]'], axis=1)
+            df.seller = [i.lower().replace('_', '-') for i in df.seller]
+            df.buyer = [i.lower().replace('_', '-') for i in df.buyer]
+            agent_dfs.append(df)
+        agent_name = agent_all_filepaths[0].split('\\')[-1].split('-trades.csv')[0]
+        dict_out = share_renewable_helper(dict_out, pd.concat(agent_dfs).sort_values(by='slot').reset_index(drop=True),
+                                          agent_name)
 
-    # TODO: Multiply share grey energy with electricity mix to obtain share renewable
-
-    return df_out
+    return pd.DataFrame.from_dict(dict_out, orient='index')
