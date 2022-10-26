@@ -226,6 +226,7 @@ def tot_cost(use_case_home_path):
 
     return dict_out
 
+
 # creates separate dfs an entity's trading partners (p_to_c, c_to_p, etc.)
 def share_renewable_df_grouper(df_out, df):
     df.index = [i.split(':00+')[0] for i in df.index.tolist()]
@@ -234,9 +235,9 @@ def share_renewable_df_grouper(df_out, df):
 
     return df
 
-# df_out: final outcome data frame, df: entity_df, p: entity_name
-def share_renewable_helper(df_out, df, p):
 
+# df_out: final outcome data frame, df: entity_df, p: entity_name
+def share_renewable_helper(df_out, df_mm, df, p, co2=False):
     p = p.replace('member', 'mm') if 'member' in p else p
     p = p.replace('germany', 'mm-germany') if 'germany' in p else p
     # get children
@@ -258,12 +259,15 @@ def share_renewable_helper(df_out, df, p):
         df_out_copy[f'{c}_p_to_c'] = p_to_cs
         # perform matrix calculations based on selected slice
         df_out_copy.loc[df_out_copy[f'{c}_net_p_to_c'] > 0, [c]] = df_out_copy[f'{c}_net_p_to_c'] / df_out_copy[
-            f'{c}_p_to_c']
+            f'{c}_p_to_c'] * df_mm['mm_grey_energy [%]']
         df_out_copy.loc[df_out_copy[f'{c}_net_p_to_c'] <= 0, [c]] = 0
-        # insert result into df_out as new column
-        with warnings.catch_warnings():
-            warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
-            df_out[c] = df_out_copy[c]
+        # rename resulting columns and insert into df_out
+        if co2:
+            df_out_copy.rename({f'{c}_net_p_to_c': f'{c}_grey_energy [kWh]', f'{c}': f'{c}_grey_energy [%]'}, axis=1,
+                               inplace=True)
+            df_out = pd.concat([df_out, df_out_copy[[f'{c}_grey_energy [kWh]', f'{c}_grey_energy [%]']]], axis=1)
+        else:
+            df_out = pd.concat([df_out, df_out_copy[c]], axis=1)
     else:
         for c in children:
             p_to_c = share_renewable_df_grouper(df_out, df[(df.seller == p) & (df.buyer == c)][['energy [kWh]']])
@@ -272,7 +276,8 @@ def share_renewable_helper(df_out, df, p):
             cs_to_c = share_renewable_df_grouper(df_out, df[(df.seller != p) & (df.seller != c) & (df.buyer == c)][
                 ['energy [kWh]']])
             c_to_cs = share_renewable_df_grouper(df_out,
-                                                 df[(df.seller == c) & (df.buyer != p) & (df.buyer != c)][['energy [kWh]']])
+                                                 df[(df.seller == c) & (df.buyer != p) & (df.buyer != c)][
+                                                     ['energy [kWh]']])
             net_cs_to_c = cs_to_c - c_to_cs
             # prepare copy of df_out where calculations are made
             c_name = c if 'id' not in c else p + '_' + c
@@ -285,52 +290,79 @@ def share_renewable_helper(df_out, df, p):
                     (df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] <= 0), [c_name]] = \
                     df_out[p]
                 p_share_grey_electricity = df_out[p]
-                df_out_copy.loc[(df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] > 0), [
-                    c_name]] = p_share_grey_electricity * (df_out_copy[f'{c_name}_net_p_to_c'] / (
+                df_out_copy.loc[
+                    (df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] > 0), [
+                        c_name]] = p_share_grey_electricity * (df_out_copy[f'{c_name}_net_p_to_c'] / (
                         df_out_copy[f'{c_name}_net_p_to_c'] + df_out_copy[f'{c_name}_net_cs_to_c']))
                 df_out_copy.loc[(df_out_copy[f'{c_name}_net_p_to_c'] <= 0), [c_name]] = 0
             else:
                 df_out_copy.loc[
-                    (df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] <= 0), [c_name]] = 1
+                    (df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] <= 0), [
+                        c_name]] = 1
                 p_share_grey_electricity = 1
-                df_out_copy.loc[(df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] > 0), [
-                    c_name]] = p_share_grey_electricity * (df_out_copy[f'{c_name}_net_p_to_c'] / (
+                df_out_copy.loc[
+                    (df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] > 0), [
+                        c_name]] = p_share_grey_electricity * (df_out_copy[f'{c_name}_net_p_to_c'] / (
                         df_out_copy[f'{c_name}_net_p_to_c'] + df_out_copy[f'{c_name}_net_cs_to_c']))
                 df_out_copy.loc[(df_out_copy[f'{c_name}_net_p_to_c'] <= 0), [c_name]] = 0
-            # insert result into df_out as new column
-            with warnings.catch_warnings():
-                warnings.simplefilter(action='ignore', category=pd.errors.PerformanceWarning)
-                df_out[c_name] = df_out_copy[c_name]
+            if co2:
+                # calculate grey energy [kWh] based on parent share, rename columns and insert into df_out
+                df_out_copy[f'{c_name}_grey_energy [kWh]'] = df_out_copy[f'{c_name}_net_p_to_c'] * df_out_copy[
+                    f'{c_name}']
+                df_out_copy.rename({f'{c_name}': f'{c_name}_grey_energy [%]'}, axis=1, inplace=True)
+                df_out = pd.concat([df_out, df_out_copy[[f'{c_name}_grey_energy [kWh]', f'{c_name}_grey_energy [%]']]],
+                                   axis=1)
+            else:
+                # insert result into df_out as new column
+                df_out = pd.concat([df_out, df_out_copy[c_name]], axis=1)
 
     return df_out
 
 
+def get_use_case_nr(use_case_home_path):
+    s_use_case = use_case_home_path.split('\\')[-1].lower()
+    if 'base' in s_use_case or '0' in s_use_case:
+        i = 0
+    elif '1' in s_use_case:
+        i = 1
+    elif '2' in s_use_case:
+        i = 2
+    elif '3' in s_use_case:
+        i = 3
+    elif '4' in s_use_case:
+        i = 4
+    elif '5' in s_use_case:
+        i = 5
+    else:
+        i = None
+
+    return i
+
+
 def share_renewables_nonempty_files(all_filepaths, use_case_home_path):
     nonempty_files_paths, empty_files_paths = [], []
-
     # detect use case from use_case_home_path
-    s_use_case = use_case_home_path.split('\\')[-1].lower()
-
-    # base case, use case 1, use case 4
-    if 'base' in s_use_case or '0' in s_use_case or '1' in s_use_case or '4' in s_use_case:
+    use_case_nr = get_use_case_nr(use_case_home_path)
+    if use_case_nr is None:
+        print('no use case found in use_case_home_path')
+        return nonempty_files_paths, empty_files_paths
+    # base case, use case 1, and use case 4
+    if use_case_nr < 2 or use_case_nr == 4:
         nonempty_files_paths = [i for i in all_filepaths if any(x in i.split('\\')[-1] for x in ('member', 'house'))]
         empty_files_paths = list(set(all_filepaths) - set(nonempty_files_paths))
-    # use case 2
-    elif '2' in s_use_case:
+    elif use_case_nr == 2:
         nonempty_files_paths = all_filepaths
-    # use case 3
-    elif '3' in s_use_case:
+    elif use_case_nr == 3:
         print('use case 3 currently not implemented.')
-        return
-    # use case 5
-    else:
+    elif use_case_nr == 5:
         print('use case 5 currently not implemented.')
-        return
+    else:
+        print('no use case found in use_case_home_path')
 
     return nonempty_files_paths, empty_files_paths
 
 
-def share_renewables(use_case_home_path):
+def prepare_filepaths(use_case_home_path):
     # obtain all months' time slots from .json files and combine them to index
     json_filepaths, timeslots = [], []
     for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
@@ -350,6 +382,62 @@ def share_renewables(use_case_home_path):
     nonempty_files_paths, empty_files_paths = share_renewables_nonempty_files(all_filepaths, use_case_home_path)
     nr_months, l = all_filenames.count(all_filenames[0]), len(nonempty_files_paths)
 
+    return nonempty_files_paths, empty_files_paths, nr_months, l, df_out
+
+
+def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec):
+    if reg is not None and ec is not None:
+        name = f'region-{reg}-ec{ec}'
+        sub_df = df_out[[i for i in df_out.columns.tolist() if name in i]]
+    if reg is not None and ec is None:
+        name = f'region-{reg}'
+        sub_df = df_out[
+            [i for i in df_out.columns.tolist() if name in i if any(f'ec{x}_' in i for x in list(range(6)))]]
+    if reg is None and ec is None:
+        name = 'germany'
+        sub_df = df_out[
+            [i for i in df_out.columns.tolist() if name in i if any(f'region-{x}_' in i for x in list(range(1, 7)))]]
+    # calculate sub-entities' energy consumed and volume-weighted average share renewables
+    df_temp = pd.DataFrame(index=sub_df.index)
+    df_temp[f'{name}_grey_energy [kWh]'] = sub_df[sub_df.columns[::2]].sum(axis=1)
+    df_temp[f'{name}_grey_energy [%]'] = 0
+    volume_kWh = abs(sub_df[sub_df.columns[::2]]).sum(axis=1)
+    # iterate over every entity pair
+    for i in range(0, len(sub_df.columns) - 1, 2):
+        t = sub_df[sub_df.columns[i:i + 2]]
+        df_temp[f'{name}_grey_energy [%]'] = abs(t[t.columns[0]]) / volume_kWh * t[t.columns[-1]]
+        df_out = pd.concat([df_out, df_temp], axis=1)
+
+    return df_out
+
+
+def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
+    if use_case_nr not in list(range(6)):
+        print(f'invalid use_case_nr: {use_case_nr}')
+        return df_out
+    if use_case_nr == 2:
+        return df_out
+    if use_case_nr < 2 or use_case_nr == 4:
+        # ecs
+        for reg in range(1, 7):
+            for ec in range(6):
+                df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec)
+        # regions
+        for reg in range(1, 7):
+            df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None)
+        # germany
+        df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
+    if use_case_nr == 3 or use_case_nr == 5:
+        print(f'empty entity aggregation not yet implemented for use case {use_case_nr}.')
+
+    return df_out
+
+
+def share_renewables(use_case_home_path):
+    # calculate net renewable share for mm over all entities that trade with it
+    df_mm = share_renewable_get_mm_quantity(use_case_home_path)
+    # for use case, extract all (non-)relevant filepaths and construct empty df_out with all time steps
+    nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
     # combine each entity's monthly data frames and hand them over to shares_renewable_helper for calculation
     for i in range(int(l / nr_months)):
         entity_monthly_dfs = []
@@ -363,7 +451,72 @@ def share_renewables(use_case_home_path):
         entity_df = pd.concat(entity_monthly_dfs).sort_values(by='slot').reset_index(drop=True)
         entity_df.set_index(['slot'], inplace=True)
         # hand over entity_df to helper function which inserts entity's result as new column into df_out
-        df_out = share_renewable_helper(df_out, entity_df, entity_name)
-        # insert empty files' names into df_out
+        df_out = share_renewable_helper(df_out, df_mm, entity_df, entity_name)
+
+    return df_out
+
+
+def share_renewable_get_mm_quantity(use_case_home_path):
+    # get all relevant files: extract all (non-)relevant filepaths and construct empty df_out with all time steps
+    nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
+    use_case_nr = get_use_case_nr(use_case_home_path)
+    if use_case_nr != 2:
+        mm_filepaths = [i for i in nonempty_files_paths if 'member' in i.split('\\')[-1]]
+    else:
+        mm_filepaths = [i for i in nonempty_files_paths if 'germany-trades.csv' in i]
+    l = len(mm_filepaths)
+    # set up df_mm
+    df_mm = df_out.copy()
+    df_mm[['mm_to_cs', 'cs_to_mm']] = 0, 0
+    # for each entity involved with mm, combine all months' data frames
+    entity_dfs = []
+    for i in range(int(l / nr_months)):
+        entity_monthly_dfs = []
+        entity_monthly_filepaths = mm_filepaths[i::int(l / nr_months)]
+        for j in entity_monthly_filepaths:
+            df_temp = pd.read_csv(j).drop(['creation_time', 'matching_requirements', 'rate [ct./kWh]'], axis=1)
+            df_temp.seller = [i.lower().replace('_', '-') for i in df_temp.seller]
+            df_temp.buyer = [i.lower().replace('_', '-') for i in df_temp.buyer]
+            entity_monthly_dfs.append(df_temp)
+        entity_name = entity_monthly_filepaths[0].split('\\')[-1].split('-trades.csv')[0]
+        entity_df = pd.concat(entity_monthly_dfs).sort_values(by='slot').reset_index(drop=True)
+        entity_dfs.append(entity_df)
+    # combine all dfs and calculate mm trading volumes
+    mm_df = pd.concat(entity_dfs, axis=0).sort_values(by='slot')
+    mm_df.set_index(['slot'], inplace=True)
+    df_mm['mm_to_cs'] = share_renewable_df_grouper(df_out, mm_df[
+        (mm_df.seller.str.contains('mm') & (~mm_df.buyer.str.contains('mm')))][['energy [kWh]']])
+    df_mm['cs_to_mm'] = share_renewable_df_grouper(df_out, mm_df[
+        (~mm_df.seller.str.contains('mm') & (mm_df.buyer.str.contains('mm')))][['energy [kWh]']])
+    df_mm['mm_grey_energy [kWh]'] = df_mm['mm_to_cs'] - df_mm['cs_to_mm']
+    df_mm.loc[df_mm['mm_grey_energy [kWh]'] > 0, ['mm_grey_energy [%]']] = df_mm['mm_grey_energy [kWh]'] / df_mm[
+        'mm_to_cs']
+    df_mm.loc[df_mm['mm_grey_energy [kWh]'] <= 0, ['mm_grey_energy [%]']] = 0
+
+    return df_mm
+
+
+def co2_emissions(use_case_home_path):
+    # calculate net renewable share for mm over all entities that trade with it
+    df_mm = share_renewable_get_mm_quantity(use_case_home_path)
+    # for use case, extract all (non-)relevant filepaths and construct empty df_out with all time steps
+    nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
+    # combine each entity's monthly data frames and hand them over to shares_renewable_helper for calculation
+    for i in range(int(l / nr_months)):
+        entity_monthly_dfs = []
+        entity_monthly_filepaths = nonempty_files_paths[i::int(l / nr_months)]
+        for j in entity_monthly_filepaths:
+            df_temp = pd.read_csv(j).drop(['creation_time', 'matching_requirements', 'rate [ct./kWh]'], axis=1)
+            df_temp.seller = [i.lower().replace('_', '-') for i in df_temp.seller]
+            df_temp.buyer = [i.lower().replace('_', '-') for i in df_temp.buyer]
+            entity_monthly_dfs.append(df_temp)
+        entity_name = entity_monthly_filepaths[0].split('\\')[-1].split('-trades.csv')[0]
+        entity_df = pd.concat(entity_monthly_dfs).sort_values(by='slot').reset_index(drop=True)
+        entity_df.set_index(['slot'], inplace=True)
+        # hand over entity_df to helper function which inserts entity's result as new column into df_out
+        df_out = share_renewable_helper(df_out, df_mm, entity_df, entity_name, co2=True)
+        # TODO: insert empty files' names into df_out
+        #use_case_nr = get_use_case_nr(use_case_home_path)
+        #df_out = share_renewables_aggregate_empty_entities(df_out, use_case_nr)
 
     return df_out
