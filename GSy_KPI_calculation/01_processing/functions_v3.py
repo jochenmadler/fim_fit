@@ -346,16 +346,15 @@ def share_renewables_nonempty_files(all_filepaths, use_case_home_path):
     if use_case_nr is None:
         print('no use case found in use_case_home_path')
         return nonempty_files_paths, empty_files_paths
-    # base case, use case 1, and use case 4
-    if use_case_nr < 2 or use_case_nr == 4:
+    # base case, use case 1, 4, and 5
+    if use_case_nr < 2 or use_case_nr >= 4:
         nonempty_files_paths = [i for i in all_filepaths if any(x in i.split('\\')[-1] for x in ('member', 'house'))]
         empty_files_paths = list(set(all_filepaths) - set(nonempty_files_paths))
     elif use_case_nr == 2:
         nonempty_files_paths = all_filepaths
     elif use_case_nr == 3:
-        print('use case 3 currently not implemented.')
-    elif use_case_nr == 5:
-        print('use case 5 currently not implemented.')
+        nonempty_files_paths = [i for i in all_filepaths if any(x in i.split('\\')[-1] for x in ('member', 'region'))]
+        empty_files_paths = list(set(all_filepaths) - set(nonempty_files_paths))
     else:
         print('no use case found in use_case_home_path')
 
@@ -386,27 +385,28 @@ def prepare_filepaths(use_case_home_path):
 
 
 def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec):
+    # obtain sub_df with sub-entities relevant for aggregation
     if reg is not None and ec is not None:
         name = f'region-{reg}-ec{ec}'
-        sub_df = df_out[[i for i in df_out.columns.tolist() if name in i]]
+        sub_df = df_out[[i for i in df_out.columns.tolist() if name in i if 'id' not in i]]
     if reg is not None and ec is None:
         name = f'region-{reg}'
         sub_df = df_out[
-            [i for i in df_out.columns.tolist() if name in i if any(f'ec{x}_' in i for x in list(range(6)))]]
+            [i for i in df_out.columns.tolist() if name in i if any(f'ec{x}_' in i for x in (range(6)))]]
     if reg is None and ec is None:
         name = 'germany'
-        sub_df = df_out[
-            [i for i in df_out.columns.tolist() if name in i if any(f'region-{x}_' in i for x in list(range(1, 7)))]]
+        sub_df = df_out[[i for i in df_out.columns.tolist() if any(f'region-{x}_' in i for x in range(1, 7))]]
     # calculate sub-entities' energy consumed and volume-weighted average share renewables
-    df_temp = pd.DataFrame(index=sub_df.index)
-    df_temp[f'{name}_grey_energy [kWh]'] = sub_df[sub_df.columns[::2]].sum(axis=1)
-    df_temp[f'{name}_grey_energy [%]'] = 0
+    df_name = pd.DataFrame(index=sub_df.index)
+    df_name[f'{name}_grey_energy [kWh]'] = sub_df[sub_df.columns[::2]].sum(axis=1)
+    df_name[f'{name}_grey_energy [%]'] = 0
     volume_kWh = abs(sub_df[sub_df.columns[::2]]).sum(axis=1)
-    # iterate over every entity pair
+    # add every sub-entity pair's volume-weighted share grey_energy [%]
     for i in range(0, len(sub_df.columns) - 1, 2):
         t = sub_df[sub_df.columns[i:i + 2]]
-        df_temp[f'{name}_grey_energy [%]'] = abs(t[t.columns[0]]) / volume_kWh * t[t.columns[-1]]
-        df_out = pd.concat([df_out, df_temp], axis=1)
+        df_name[f'{name}_grey_energy [%]'] += abs(t[t.columns[0]]) / volume_kWh * t[t.columns[-1]]
+    # combine df_name with df_out
+    df_out = pd.concat([df_out, df_name], axis=1)
 
     return df_out
 
@@ -417,7 +417,7 @@ def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
         return df_out
     if use_case_nr == 2:
         return df_out
-    if use_case_nr < 2 or use_case_nr == 4:
+    if use_case_nr < 2 or use_case_nr >= 4:
         # ecs
         for reg in range(1, 7):
             for ec in range(6):
@@ -427,8 +427,9 @@ def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
             df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None)
         # germany
         df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
-    if use_case_nr == 3 or use_case_nr == 5:
-        print(f'empty entity aggregation not yet implemented for use case {use_case_nr}.')
+    if use_case_nr == 3:
+        # germany
+        df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
 
     return df_out
 
@@ -500,7 +501,7 @@ def co2_emissions(use_case_home_path):
     # calculate net renewable share for mm over all entities that trade with it
     df_mm = share_renewable_get_mm_quantity(use_case_home_path)
     # for use case, extract all (non-)relevant filepaths and construct empty df_out with all time steps
-    nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
+    nonempty_files_paths, empty_files_paths, nr_months, l, df = prepare_filepaths(use_case_home_path)
     # combine each entity's monthly data frames and hand them over to shares_renewable_helper for calculation
     for i in range(int(l / nr_months)):
         entity_monthly_dfs = []
@@ -514,9 +515,9 @@ def co2_emissions(use_case_home_path):
         entity_df = pd.concat(entity_monthly_dfs).sort_values(by='slot').reset_index(drop=True)
         entity_df.set_index(['slot'], inplace=True)
         # hand over entity_df to helper function which inserts entity's result as new column into df_out
-        df_out = share_renewable_helper(df_out, df_mm, entity_df, entity_name, co2=True)
-        # TODO: insert empty files' names into df_out
-        #use_case_nr = get_use_case_nr(use_case_home_path)
-        #df_out = share_renewables_aggregate_empty_entities(df_out, use_case_nr)
+        df = share_renewable_helper(df, df_mm, entity_df, entity_name, co2=True)
+        # aggregate sub-entities to fill missing top-level entities' values (depends on use case)
+        use_case_nr = get_use_case_nr(use_case_home_path)
+        df_out = share_renewables_aggregate_empty_entities(df, use_case_nr)
 
     return df_out
