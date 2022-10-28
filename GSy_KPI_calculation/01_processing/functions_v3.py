@@ -247,7 +247,8 @@ def share_renewable_helper(df_out, df_mm, df, p, co2=False):
 
     # top level calculation: neglect mm and calculate share for only c
     if 'mm-' in p:
-        c = 'germany' if 'grid' in children else children[0]
+        #c = 'germany' if 'grid' in children else children[0]
+        c = children[0]
         p_to_cs = share_renewable_df_grouper(df_out, df[(df.seller.str.contains(p) & (~df.buyer.str.contains(p)))][
             ['energy [kWh]']])
         cs_to_p = share_renewable_df_grouper(df_out, df[(~df.seller.str.contains(p) & (df.buyer.str.contains(p)))][
@@ -285,11 +286,11 @@ def share_renewable_helper(df_out, df_mm, df, p, co2=False):
             df_out_copy[f'{c_name}_net_p_to_c'] = net_p_to_c
             df_out_copy[f'{c_name}_net_cs_to_c'] = net_cs_to_c
             # perform matrix calculations based on selected slice
-            if p in df_out.columns.tolist():
+            if f'{p}_grey_energy [%]' in df_out.columns.tolist():
                 df_out_copy.loc[
                     (df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] <= 0), [c_name]] = \
-                    df_out[p]
-                p_share_grey_electricity = df_out[p]
+                    df_out[f'{p}_grey_energy [%]']
+                p_share_grey_electricity = df_out[f'{p}_grey_energy [%]']
                 df_out_copy.loc[
                     (df_out_copy[f'{c_name}_net_p_to_c'] > 0) & (df_out_copy[f'{c_name}_net_cs_to_c'] > 0), [
                         c_name]] = p_share_grey_electricity * (df_out_copy[f'{c_name}_net_p_to_c'] / (
@@ -421,9 +422,9 @@ def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
     if use_case_nr not in list(range(6)):
         print(f'invalid use_case_nr: {use_case_nr}')
         return df_out
-    if use_case_nr == 2:
+    if use_case_nr in [2, 6]:
         return df_out
-    if use_case_nr < 2 or use_case_nr >= 4:
+    if use_case_nr in [0, 1, 5]:
         # ecs
         for reg in range(1, 7):
             for ec in range(6):
@@ -434,6 +435,12 @@ def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
         # germany
         df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
     if use_case_nr == 3:
+        # germany
+        df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
+    if use_case_nr == 4:
+        # regions
+        for reg in range(1, 7):
+            df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None)
         # germany
         df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
 
@@ -507,7 +514,7 @@ def co2_emissions(use_case_home_path):
     # calculate net renewable share for mm over all entities that trade with it
     df_mm = share_renewable_get_mm_quantity(use_case_home_path)
     # for use case, extract all (non-)relevant filepaths and construct empty df_out with all time steps
-    nonempty_files_paths, empty_files_paths, nr_months, l, df = prepare_filepaths(use_case_home_path)
+    nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
     # combine each entity's monthly data frames and hand them over to shares_renewable_helper for calculation
     for i in range(int(l / nr_months)):
         entity_monthly_dfs = []
@@ -521,9 +528,9 @@ def co2_emissions(use_case_home_path):
         entity_df = pd.concat(entity_monthly_dfs).sort_values(by='slot').reset_index(drop=True)
         entity_df.set_index(['slot'], inplace=True)
         # hand over entity_df to helper function which inserts entity's result as new column into df_out
-        df_out = share_renewable_helper(df, df_mm, entity_df, entity_name, co2=True)
-        # aggregate sub-entities to fill missing top-level entities' values (depends on use case)
-        use_case_nr = get_use_case_nr(use_case_home_path)
-        # df_out = share_renewables_aggregate_empty_entities(df_out, use_case_nr)
+        df_out = share_renewable_helper(df_out, df_mm, entity_df, entity_name, co2=True)
+    # aggregate sub-entities to fill missing top-level entities' values (depends on use case)
+    use_case_nr = get_use_case_nr(use_case_home_path)
+    df_out = share_renewables_aggregate_empty_entities(df_out, use_case_nr)
 
     return df_out
