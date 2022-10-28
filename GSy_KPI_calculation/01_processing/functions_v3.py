@@ -333,6 +333,8 @@ def get_use_case_nr(use_case_home_path):
         i = 4
     elif '5' in s_use_case:
         i = 5
+    elif '6' in s_use_case:
+        i = 6
     else:
         i = None
 
@@ -347,13 +349,17 @@ def share_renewables_nonempty_files(all_filepaths, use_case_home_path):
         print('no use case found in use_case_home_path')
         return nonempty_files_paths, empty_files_paths
     # base case, use case 1, 4, and 5
-    if use_case_nr < 2 or use_case_nr >= 4:
+    if use_case_nr < 2 or use_case_nr == 5:
         nonempty_files_paths = [i for i in all_filepaths if any(x in i.split('\\')[-1] for x in ('member', 'house'))]
         empty_files_paths = list(set(all_filepaths) - set(nonempty_files_paths))
-    elif use_case_nr == 2:
+    elif use_case_nr == 2 or use_case_nr == 6:
         nonempty_files_paths = all_filepaths
     elif use_case_nr == 3:
         nonempty_files_paths = [i for i in all_filepaths if any(x in i.split('\\')[-1] for x in ('member', 'region'))]
+        empty_files_paths = list(set(all_filepaths) - set(nonempty_files_paths))
+    elif use_case_nr == 4:
+        nonempty_files_paths = [i for i in all_filepaths if
+                                any(x in i.split('\\')[-1] for x in ('member', 'house', 'ec'))]
         empty_files_paths = list(set(all_filepaths) - set(nonempty_files_paths))
     else:
         print('no use case found in use_case_home_path')
@@ -461,7 +467,7 @@ def share_renewable_get_mm_quantity(use_case_home_path):
     # get all relevant files: extract all (non-)relevant filepaths and construct empty df_out with all time steps
     nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
     use_case_nr = get_use_case_nr(use_case_home_path)
-    if use_case_nr != 2:
+    if use_case_nr != 2 and use_case_nr != 6:
         mm_filepaths = [i for i in nonempty_files_paths if 'member' in i.split('\\')[-1]]
     else:
         mm_filepaths = [i for i in nonempty_files_paths if 'germany-trades.csv' in i]
@@ -515,9 +521,9 @@ def co2_emissions(use_case_home_path):
         entity_df = pd.concat(entity_monthly_dfs).sort_values(by='slot').reset_index(drop=True)
         entity_df.set_index(['slot'], inplace=True)
         # hand over entity_df to helper function which inserts entity's result as new column into df_out
-        df = share_renewable_helper(df, df_mm, entity_df, entity_name, co2=True)
+        df_out = share_renewable_helper(df, df_mm, entity_df, entity_name, co2=True)
         # aggregate sub-entities to fill missing top-level entities' values (depends on use case)
         use_case_nr = get_use_case_nr(use_case_home_path)
-        df_out = share_renewables_aggregate_empty_entities(df, use_case_nr)
+        # df_out = share_renewables_aggregate_empty_entities(df_out, use_case_nr)
 
     return df_out
