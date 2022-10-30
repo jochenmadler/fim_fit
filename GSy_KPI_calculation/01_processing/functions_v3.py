@@ -247,7 +247,7 @@ def share_renewable_helper(df_out, df_mm, df, p, co2=False):
 
     # top level calculation: neglect mm and calculate share for only c
     if 'mm-' in p:
-        #c = 'germany' if 'grid' in children else children[0]
+        # c = 'germany' if 'grid' in children else children[0]
         c = children[0]
         p_to_cs = share_renewable_df_grouper(df_out, df[(df.seller.str.contains(p) & (~df.buyer.str.contains(p)))][
             ['energy [kWh]']])
@@ -391,7 +391,7 @@ def prepare_filepaths(use_case_home_path):
     return nonempty_files_paths, empty_files_paths, nr_months, l, df_out
 
 
-def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec):
+def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec, special_case=False):
     # obtain sub_df with sub-entities relevant for aggregation
     if reg is not None and ec is not None:
         name = f'region-{reg}-ec{ec}'
@@ -401,25 +401,37 @@ def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec):
         sub_df = df_out[
             [i for i in df_out.columns.tolist() if name in i if any(f'ec{x}_' in i for x in (range(6)))]]
     if reg is None and ec is None:
-        name = 'germany'
+        name = 'grid'
         sub_df = df_out[[i for i in df_out.columns.tolist() if any(f'region-{x}_' in i for x in range(1, 7))]]
     # calculate sub-entities' energy consumed and volume-weighted average share renewables
     df_name = pd.DataFrame(index=sub_df.index)
-    df_name[f'{name}_grey_energy [kWh]'] = sub_df[sub_df.columns[::2]].sum(axis=1)
     df_name[f'{name}_grey_energy [%]'] = 0
-    volume_kWh = abs(sub_df[sub_df.columns[::2]]).sum(axis=1)
+    if not special_case:
+        df_name[f'{name}_grey_energy [kWh]'] = sub_df[sub_df.columns[::2]].sum(axis=1)
+        volume_kWh = abs(sub_df[sub_df.columns[::2]]).sum(axis=1)
+    else:
+        if f'{name}_grey_energy [kWh]' in sub_df.columns:
+            sub_df.drop(f'{name}_grey_energy [kWh]', axis=1, inplace=True)
+        if f'{name}_grey_energy [%]' in sub_df.columns:
+            sub_df.drop(f'{name}_grey_energy [%]', axis=1, inplace=True)
+        volume_kWh = df_out[f'{name}_grey_energy [kWh]']
     # add every sub-entity pair's volume-weighted share grey_energy [%]
     for i in range(0, len(sub_df.columns) - 1, 2):
         t = sub_df[sub_df.columns[i:i + 2]]
-        df_name[f'{name}_grey_energy [%]'] += abs(t[t.columns[0]]) / volume_kWh * t[t.columns[-1]]
+        df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] <= 0] = 0
+        df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] > 0] = abs(t[t.columns[0]]) / volume_kWh * \
+                                                                                    t[t.columns[-1]]
     # combine df_name with df_out
-    df_out = pd.concat([df_out, df_name], axis=1)
+    if not special_case:
+        df_out = pd.concat([df_out, df_name], axis=1)
+    else:
+        df_out[f'{name}_grey_energy [%]'] = df_name[f'{name}_grey_energy [%]']
 
     return df_out
 
 
 def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
-    if use_case_nr not in list(range(6)):
+    if use_case_nr not in list(range(7)):
         print(f'invalid use_case_nr: {use_case_nr}')
         return df_out
     if use_case_nr in [2, 6]:
@@ -443,6 +455,26 @@ def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
             df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None)
         # germany
         df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
+
+    return df_out
+
+
+def share_renewables_aggregate_empty_entities_UC_2_6(df_out):
+    # ecs
+    for reg in range(1, 7):
+        for ec in range(6):
+            #name = f'region-{reg}-ec{ec}'
+            #df_out.drop([f'{name}_grey_energy [%]'], axis=1, inplace=True)
+            df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec, special_case=True)
+    # regions
+    for reg in range(1, 7):
+        #name = f'region-{reg}'
+        #df_out.drop([f'{name}_grey_energy [%]'], axis=1, inplace=True)
+        df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None, special_case=True)
+    # germany
+    #name = 'grid'
+    #df_out.drop([f'{name}_grey_energy [%]'], axis=1, inplace=True)
+    df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None, special_case=True)
 
     return df_out
 
