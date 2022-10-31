@@ -418,8 +418,8 @@ def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec, special_ca
     # add every sub-entity pair's volume-weighted share grey_energy [%]
     for i in range(0, len(sub_df.columns) - 1, 2):
         t = sub_df[sub_df.columns[i:i + 2]]
-        df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] <= 0] = 0
-        df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] > 0] = abs(t[t.columns[0]]) / volume_kWh * \
+        df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] <= 0] += 0
+        df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] > 0] += abs(t[t.columns[0]]) / volume_kWh * \
                                                                                     t[t.columns[-1]]
     # combine df_name with df_out
     if not special_case:
@@ -566,3 +566,9 @@ def co2_emissions(use_case_home_path):
     df_out = share_renewables_aggregate_empty_entities(df_out, use_case_nr)
 
     return df_out
+
+
+def share_renewables_necessary_files(use_case_home_path):
+    nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
+
+    return nonempty_files_paths
