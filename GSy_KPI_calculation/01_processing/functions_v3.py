@@ -570,5 +570,18 @@ def co2_emissions(use_case_home_path):
 
 def share_renewables_necessary_files(use_case_home_path):
     nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
+    dfs = []
+    for i in range(int(l / nr_months)):
+        entity_monthly_dfs = []
+        entity_monthly_filepaths = nonempty_files_paths[i::int(l / nr_months)]
+        for j in entity_monthly_filepaths:
+            df_temp = pd.read_csv(j).drop(['creation_time', 'matching_requirements', 'rate [ct./kWh]'], axis=1)
+            df_temp.seller = [i.lower().replace('_', '-') for i in df_temp.seller]
+            df_temp.buyer = [i.lower().replace('_', '-') for i in df_temp.buyer]
+            entity_monthly_dfs.append(df_temp)
+        entity_name = entity_monthly_filepaths[0].split('\\')[-1].split('-trades.csv')[0]
+        entity_df = pd.concat(entity_monthly_dfs).sort_values(by='slot').reset_index(drop=True)
+        entity_df.set_index(['slot'], inplace=True)
+        dfs.append(entity_df)
 
-    return nonempty_files_paths
+    return pd.concat(dfs, axis=0).sort_values(by='slot')
