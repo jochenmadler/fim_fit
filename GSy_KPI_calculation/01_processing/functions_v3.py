@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import functools as func
 import warnings
+from icecream import ic
 
 
 def avg_p_germany_helper(file_path):
@@ -310,7 +311,7 @@ def share_renewable_helper(df_out, df_mm, df, p, co2=False):
                 # calculate grey energy [kWh] based on parent share, rename columns and insert into df_out
                 df_out_copy[f'{c_name}_grey_energy [kWh]'] = df_out_copy[f'{c_name}_net_p_to_c'] * df_out_copy[
                     f'{c_name}']
-                df_out_copy.rename({f'{c_name}': f'{c_name}_grey_energy [%]'}, axis=1, inplace=True)
+                df_out_copy.rename({f'{c_name}': f'{c_name}_grey_energy [%]'}, axis=1, inplace=True) # TODO: Should this be elsewhere?
                 df_out = pd.concat([df_out, df_out_copy[[f'{c_name}_grey_energy [kWh]', f'{c_name}_grey_energy [%]']]],
                                    axis=1)
             else:
@@ -418,9 +419,11 @@ def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec, special_ca
     # add every sub-entity pair's volume-weighted share grey_energy [%]
     for i in range(0, len(sub_df.columns) - 1, 2):
         t = sub_df[sub_df.columns[i:i + 2]]
+        ic(df_name[f'{name}_grey_energy [%]'])
         df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] <= 0] += 0
         df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] > 0] += abs(t[t.columns[0]]) / volume_kWh * \
                                                                                     t[t.columns[-1]]
+        ic(df_name[f'{name}_grey_energy [%]'])
     # combine df_name with df_out
     if not special_case:
         df_out = pd.concat([df_out, df_name], axis=1)
@@ -506,10 +509,10 @@ def share_renewable_get_mm_quantity(use_case_home_path):
     # get all relevant files: extract all (non-)relevant filepaths and construct empty df_out with all time steps
     nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
     use_case_nr = get_use_case_nr(use_case_home_path)
-    if use_case_nr != 2 and use_case_nr != 6:
-        mm_filepaths = [i for i in nonempty_files_paths if 'member' in i.split('\\')[-1]]
-    else:
+    if use_case_nr == 2 or use_case_nr == 6:
         mm_filepaths = [i for i in nonempty_files_paths if 'germany-trades.csv' in i]
+    else:
+        mm_filepaths = [i for i in nonempty_files_paths if 'member' in i.split('\\')[-1]]
     l = len(mm_filepaths)
     # set up df_mm
     df_mm = df_out.copy()
