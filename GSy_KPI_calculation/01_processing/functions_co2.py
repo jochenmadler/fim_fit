@@ -20,13 +20,15 @@ def get_datetime_index(uc_dir, nr_months):
 
 def get_files_for_uc(uc_nr, uc_dir, nr_months):
     fpaths = []
+    # collect bottom-level entities' (house/wind/industry) filepaths
     for root, dir, files in os.walk(top = uc_dir, topdown=True):
         if uc_nr in ['0','1','5']:
             fpaths += [os.path.join(root,f) for f in files if 'member-' in f if '-trades.csv' in f]
         else:
             fpaths += [os.path.join(root,f) for f in files if any(f'region-{reg}-ec{ec}-trades.csv' in f for reg in range(1,7) for ec in range(6))]
-    if len(fpaths) % 4 != 0:
-        raise Exception(f'ERROR: {len(fpaths)} filepaths, not divisible by {nr_months} months. Files are missing.')
+    # for each entity, there must be n files (n = nr_months)
+    assert len(fpaths) % nr_months != 0, f'ERROR: {len(fpaths)} filepaths, not divisible by {nr_months} months. Files are missing.'
+    
     return fpaths
     
 def get_combined_df_p(p_paths, uc_nr):
@@ -51,6 +53,7 @@ def trades_dfs_grouper(df_out_index, df_to_group):
     
     return df_grouped
 
+# get_p_trades_dfs() not used
 def get_p_trades_dfs(p, df_e, df_out_index):
     p_to_cs = trades_dfs_grouper(df_out_index, df_e[(df_e.seller.isin(p)) & (~df_e.buyer.isin(p))])
     cs_to_p = trades_dfs_grouper(df_out_index, df_e[(~df_e.seller.isin(p)) & (df_e.buyer.isin(p))])
@@ -87,7 +90,7 @@ def rename_e_series(e_green_in, e_grey_in, e_co2e, e_share_green, e):
     
     return e_green_in, e_grey_in, e_co2e, e_share_green
     
-def get_childrens_co2(home_path, uc_nr, uc_dir, nr_months):
+def get_childrens_co2(uc_nr, uc_dir, nr_months):
     # create empty df with date time index
     df_out = pd.DataFrame(index=get_datetime_index(uc_dir, nr_months))
     df_out_index = df_out.index
@@ -146,14 +149,13 @@ def kpi_calculation(home_path, uc_nr):
     nr_months = 4
     # obtain use case number (uc_nr)
     uc_nr = str(uc_nr)
-    if uc_nr not in ['0','1','2','2-1','2-2','3','4','5','6']:
-        raise Exception(f'ERROR: uc_nr is {uc_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]')
+    assert uc_nr in ['0','1','2','2-1','2-2','3','4','5','6'], f'ERROR: uc_nr is {uc_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
     if uc_nr == '0':
         uc_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if 'base' in i.name.lower() if 'case' in i.name.lower()][0]
     else:
         uc_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if f'case_{uc_nr}' in i.name.lower()][0]
-    # get bottom-level df_out_raw for aggregation (#cols: #entities * 4) and list of all childrens' names
-    df_temp, cs_names = get_childrens_co2(home_path, uc_nr, uc_dir, nr_months)
+    # get bottom-level df_out_raw for aggregation (#cols: #entities * 4) and list of all childrens' names (cs_names)
+    df_temp, cs_names = get_childrens_co2(uc_nr, uc_dir, nr_months)
     for r in range(1,7):
         # aggregate all houses to ecs
         for e in range(6):
