@@ -380,7 +380,6 @@ def prepare_filepaths(use_case_home_path):
                       range(len(df['Germany']['price-energy-day']))]
     timeslots.sort()
     df_out = pd.DataFrame(index=timeslots)
-
     # get (non-)empty files' paths
     all_filepaths, all_filenames = [], []
     for root, dir, file in os.walk(top=use_case_home_path, topdown=True):
