@@ -325,6 +325,10 @@ def get_use_case_nr(use_case_home_path):
     s_use_case = use_case_home_path.split('\\')[-1].lower()
     if 'base' in s_use_case or '0' in s_use_case:
         i = 0
+    elif '2-1' in s_use_case:
+        i = 2.1
+    elif '2-2' in s_use_case:
+        i = 2.2
     elif '1' in s_use_case:
         i = 1
     elif '2' in s_use_case:
@@ -354,7 +358,7 @@ def share_renewables_nonempty_files(all_filepaths, use_case_home_path):
     if use_case_nr < 2 or use_case_nr == 5:
         nonempty_files_paths = [i for i in all_filepaths if any(x in i.split('\\')[-1] for x in ('member', 'house'))]
         empty_files_paths = list(set(all_filepaths) - set(nonempty_files_paths))
-    elif use_case_nr == 2 or use_case_nr == 6:
+    elif int(use_case_nr) == 2 or use_case_nr == 6:
         nonempty_files_paths = all_filepaths
     elif use_case_nr == 3:
         nonempty_files_paths = [i for i in all_filepaths if any(x in i.split('\\')[-1] for x in ('member', 'region'))]
@@ -418,11 +422,9 @@ def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec, special_ca
     # add every sub-entity pair's volume-weighted share grey_energy [%]
     for i in range(0, len(sub_df.columns) - 1, 2):
         t = sub_df[sub_df.columns[i:i + 2]]
-        ic(df_name[f'{name}_grey_energy [%]'])
         df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] <= 0] += 0
         df_name[f'{name}_grey_energy [%]'].loc[volume_kWh * t[t.columns[-1]] > 0] += abs(t[t.columns[0]]) / volume_kWh * \
                                                                                     t[t.columns[-1]]
-        ic(df_name[f'{name}_grey_energy [%]'])
     # combine df_name with df_out
     if not special_case:
         df_out = pd.concat([df_out, df_name], axis=1)
@@ -433,17 +435,17 @@ def share_renewables_aggregate_empty_entities_helper(df_out, reg, ec, special_ca
 
 
 def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
-    if use_case_nr not in list(range(7)):
+    if use_case_nr not in [0,1,2,2.1,2.2,3,4,5,6]:
         print(f'invalid use_case_nr: {use_case_nr}')
         return df_out
-    if use_case_nr in [2, 6]:
+    if use_case_nr in [2, 2.1, 2.2, 6]:
         return df_out
     if use_case_nr in [0, 1, 5]:
         # ecs
         for reg in range(1, 7):
             for ec in range(6):
                 df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec)
-        # regions
+        # regio
         for reg in range(1, 7):
             df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None)
         # germany
@@ -452,7 +454,7 @@ def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
         # germany
         df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
     if use_case_nr == 4:
-        # regions
+        # regio
         for reg in range(1, 7):
             df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None)
         # germany
@@ -468,7 +470,7 @@ def share_renewables_aggregate_empty_entities_UC_2_6(df_out):
             #name = f'region-{reg}-ec{ec}'
             #df_out.drop([f'{name}_grey_energy [%]'], axis=1, inplace=True)
             df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec, special_case=True)
-    # regions
+    # regio
     for reg in range(1, 7):
         #name = f'region-{reg}'
         #df_out.drop([f'{name}_grey_energy [%]'], axis=1, inplace=True)
@@ -508,7 +510,7 @@ def share_renewable_get_mm_quantity(use_case_home_path):
     # get all relevant files: extract all (non-)relevant filepaths and construct empty df_out with all time steps
     nonempty_files_paths, empty_files_paths, nr_months, l, df_out = prepare_filepaths(use_case_home_path)
     use_case_nr = get_use_case_nr(use_case_home_path)
-    if use_case_nr == 2 or use_case_nr == 6:
+    if int(use_case_nr) == 2 or use_case_nr == 6:
         mm_filepaths = [i for i in nonempty_files_paths if 'germany-trades.csv' in i]
     else:
         mm_filepaths = [i for i in nonempty_files_paths if 'member' in i.split('\\')[-1]]

@@ -429,7 +429,7 @@ def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
         for reg in range(1, 7):
             for ec in range(6):
                 df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec)
-        # regions
+        # regio
         for reg in range(1, 7):
             df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None)
         # germany
@@ -438,7 +438,7 @@ def share_renewables_aggregate_empty_entities(df_out, use_case_nr):
         # germany
         df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg=None, ec=None)
     if use_case_nr == 4:
-        # regions
+        # regio
         for reg in range(1, 7):
             df_out = share_renewables_aggregate_empty_entities_helper(df_out, reg, ec=None)
         # germany

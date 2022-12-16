@@ -81,7 +81,7 @@ def get_c_trades_dfs(c, p, cs, df_e, df_out_index):
     
 def co2_footprint(e_green_in, e_grey_in):
     # taken from: https://fimrc.sharepoint.com/:x:/t/paper-VIdES/EZnJhlevmuVMi3knXpjlRuIBcDw-HWPnGKyYyXgRi7xe6g?e=7Q4Xhm
-    gco2e_kWh_green, gco2e_kWh_grey = 27.8180, 181.79
+    gco2e_kWh_green, gco2e_kWh_grey = 0.0, 181.79
     # convert g to kg (/1000)
     e_co2e = ((e_green_in * gco2e_kWh_green) + (e_grey_in * gco2e_kWh_grey)) / 1000
     
