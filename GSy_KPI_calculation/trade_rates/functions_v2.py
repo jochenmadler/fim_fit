@@ -367,3 +367,11 @@ def share_renewables(use_case_home_path):
         # insert empty files' names into df_out
 
     return df_out
+
+
+def get_use_case_nr(use_case_home_path):
+    uc_nr = use_case_home_path.split('\\')[-1].lower().replace('use','').replace('case', '').replace('_', '')
+    if 'base' in uc_nr:
+        uc_nr = '0'
+        
+    return uc_nr
