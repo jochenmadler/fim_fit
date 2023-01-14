@@ -247,7 +247,7 @@ def share_renewable_helper(df_out, df_mm, df, p, co2=False):
 
     # top level calculation: neglect mm and calculate share for only c
     if 'mm-' in p:
-        #c = 'germany' if 'grid' in children else children[0]
+        # c = 'germany' if 'grid' in children else children[0]
         c = children[0]
         p_to_cs = share_renewable_df_grouper(df_out, df[(df.seller.str.contains(p) & (~df.buyer.str.contains(p)))][
             ['energy [kWh]']])
@@ -322,6 +322,8 @@ def share_renewable_helper(df_out, df_mm, df, p, co2=False):
 
 def get_use_case_nr(use_case_home_path):
     s_use_case = use_case_home_path.split('\\')[-1].lower()
+    if '_v' in s_use_case:
+        s_use_case = s_use_case.split('_v')[0]
     if 'base' in s_use_case or '0' in s_use_case:
         i = 0
     elif '1' in s_use_case:

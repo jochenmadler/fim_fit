@@ -193,11 +193,14 @@ def kpi_calculation(home_path, uc_nr):
     nr_months = 4
     # obtain use case number (uc_nr) and check that it is valid
     uc_nr = str(uc_nr)
-    assert uc_nr in ['0','1','2','2-1','2-2','3','4','5','6'], f'ERROR: uc_nr is {uc_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
+    assert uc_nr in ['0','1','2','2-1','2-2','3','3_v2','4','5','6'], f'ERROR: uc_nr is {uc_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
     if uc_nr == '0':
         uc_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if 'base' in i.name.lower() if 'case' in i.name.lower()][0]
     else:
         uc_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if f'case_{uc_nr}' in i.name.lower()][0]
+    # for subsequent calculation, treat use case  3_v2 like use case 3
+    if uc_nr == '3_v2':
+        uc_nr = '3'
     # get data frame with all houses' share renewables, which considers higher-levels' share renewables depending on the use case 
     df_temp = get_bottom_level_df(uc_nr, uc_dir, nr_months)
     # bottom-up aggregation
@@ -214,6 +217,4 @@ def kpi_calculation(home_path, uc_nr):
     df_temp = aggregate_entity(df_temp, g_name, level='germany')
     
     return df_temp
-        
-    
     

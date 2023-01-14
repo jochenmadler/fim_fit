@@ -323,6 +323,8 @@ def share_renewable_helper(df_out, df_mm, df, p, co2=False):
 
 def get_use_case_nr(use_case_home_path):
     s_use_case = use_case_home_path.split('\\')[-1].lower()
+    if '_v' in s_use_case:
+        s_use_case = s_use_case.split('_v')[0]
     if 'base' in s_use_case or '0' in s_use_case:
         i = 0
     elif '2-1' in s_use_case:
@@ -556,6 +558,8 @@ def co2_emissions(use_case_home_path):
         entity_monthly_dfs = []
         entity_monthly_filepaths = nonempty_files_paths[i::int(l / nr_months)]
         for j in entity_monthly_filepaths:
+            s = j.split('Wochen')[-1] # TODO: remove
+            print(f'current file: {s}') # TODO: remove
             df_temp = pd.read_csv(j).drop(['creation_time', 'matching_requirements', 'rate [ct./kWh]'], axis=1)
             df_temp.seller = [i.lower().replace('_', '-') for i in df_temp.seller]
             df_temp.buyer = [i.lower().replace('_', '-') for i in df_temp.buyer]
