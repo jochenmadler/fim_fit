@@ -3,6 +3,21 @@ import numpy as np
 import pandas as pd
 
 
+def get_use_case_dir_and_nr(home_path, use_case_nr):
+    # check use case number for validity
+    use_case_nr = str(use_case_nr)
+    assert use_case_nr in ['0','1','2','2-1','2-2','3','3_v2','4','5','6'], f'ERROR: uc_nr is {use_case_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
+    if use_case_nr == '0' and any('base' in x for x in [i.name for i in os.scandir(home_path) if i.is_dir()]):
+        use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if 'base' in i.name.lower() if 'case' in i.name.lower()][0]
+    else:
+        use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if f'case_{use_case_nr}' in i.name.lower()][0]
+    # treat versions of use case like original use case (3_v2 -> 3, 2-2 -> 2, etc.)
+    if '-' in use_case_nr or '_' in use_case_nr or 'v' in use_case_nr:
+        use_case_nr = use_case_nr[0]
+    
+    return use_case_dir, int(use_case_nr)
+
+
 # get complete DateTimeIndex for simulation period from .json file
 def get_datetime_index(uc_dir, nr_months):
     dt_fpaths, dt_index = [], []
@@ -21,23 +36,32 @@ def get_datetime_index(uc_dir, nr_months):
 def get_files_for_uc(uc_nr, uc_dir, nr_months, level):
     if level not in ['region', 'ec', 'house']:
         raise Exception(f'ERROR: If {level} is not None, it must be in [region, ec, house].')
-    fpaths = []
+    fpaths, fnames = [], []
     for root, dir, files in os.walk(top = uc_dir, topdown=True):
         if uc_nr in ['0','1','5']:
             fpaths += [os.path.join(root,f) for f in files if 'member-' in f if '-trades.csv' in f]
+            fnames += [f for f in files if 'member-' in f if '-trades.csv' in f]
         else:
             if level == 'region':
                 # level == 'region': Collect germany (grid) filepaths
                 fpaths += [os.path.join(root,f) for f in files if 'grid-trades.csv' in f]
+                fnames += [f for f in files if 'grid-trades.csv' in f]
             elif level == 'ec':
                 # level == 'ec': Collect regions' filepats
                 fpaths += [os.path.join(root,f) for f in files if any(f'region-{reg}-trades.csv' in f for reg in range(1,7))]
+                fnames += [f for f in files if any(f'region-{reg}-trades.csv' in f for reg in range(1,7))]
             else:
                 # level == 'house': collect bottom-level entities' (house/wind/industry) filepaths
                 fpaths += [os.path.join(root,f) for f in files if any(f'region-{reg}-ec{ec}-trades.csv' in f for reg in range(1,7) for ec in range(6))]
+                fpaths += [f for f in files if any(f'region-{reg}-ec{ec}-trades.csv' in f for reg in range(1,7) for ec in range(6))]
     # for each entity, there must be n files (n = nr_months)
-    assert len(fpaths) % nr_months == 0, f'ERROR: {len(fpaths)} filepaths, not divisible by {nr_months} months. Files are missing.'
-    
+    if len(fpaths) % nr_months != 0:
+        incomplete_fnames = [i for i in fnames if fnames.count(i) != nr_months]
+        print(f'ERROR: {len(fpaths)} files not divisible by {nr_months} months. Each file should have one version for each month ({nr_months} here). For the following files, this is not true:\n')
+        for fname in incomplete_fnames:
+            print(f'{fname}:\n',[i for i in fpaths if incomplete_fnames[0] in i], '\n')
+        raise Exception()
+        
     return fpaths
     
 def get_combined_df_p(p_paths, uc_nr):
@@ -195,7 +219,7 @@ def co2_calculation(home_path, use_case_nr):
     # obtain use case number (uc_nr) and check that it is valid
     use_case_nr = str(use_case_nr)
     assert use_case_nr in ['0','1','2','2-1','2-2','3','3_v2','4','5','6'], f'ERROR: uc_nr is {use_case_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
-    if use_case_nr == '0' and any('base' for x in [i.name for i in os.scandir(home_path) if i.is_dir()]):
+    if use_case_nr == '0' and any('base' in x for x in [i.name for i in os.scandir(home_path) if i.is_dir()]):
         use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if 'base' in i.name.lower() if 'case' in i.name.lower()][0]
     else:
         use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if f'case_{use_case_nr}' in i.name.lower()][0]

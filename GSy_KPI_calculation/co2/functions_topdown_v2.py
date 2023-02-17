@@ -5,7 +5,7 @@ def get_use_case_dir_and_nr(home_path, use_case_nr):
     # check use case number for validity
     use_case_nr = str(use_case_nr)
     assert use_case_nr in ['0','1','2','2-1','2-2','3','3_v2','4','5','6'], f'ERROR: uc_nr is {use_case_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
-    if use_case_nr == '0' and any('base' for x in [i.name for i in os.scandir(home_path) if i.is_dir()]):
+    if use_case_nr == '0' and any('base' in x for x in [i.name for i in os.scandir(home_path) if i.is_dir()]):
         use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if 'base' in i.name.lower() if 'case' in i.name.lower()][0]
     else:
         use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if f'case_{use_case_nr}' in i.name.lower()][0]
