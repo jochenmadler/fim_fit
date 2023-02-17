@@ -189,20 +189,23 @@ def get_bottom_level_df(uc_nr, uc_dir, nr_months):
         df_ecs = df_temp[[i for i in df_temp if 'share_renewable' in i]]
         return get_childrens_co2(uc_nr, uc_dir, nr_months, level='house', df_p_share_renewable=df_ecs)
 
-def kpi_calculation(home_path, uc_nr):
+def co2_calculation(home_path, use_case_nr):
     nr_months = 4
+    
     # obtain use case number (uc_nr) and check that it is valid
-    uc_nr = str(uc_nr)
-    assert uc_nr in ['0','1','2','2-1','2-2','3','3_v2','4','5','6'], f'ERROR: uc_nr is {uc_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
-    if uc_nr == '0':
-        uc_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if 'base' in i.name.lower() if 'case' in i.name.lower()][0]
+    use_case_nr = str(use_case_nr)
+    assert use_case_nr in ['0','1','2','2-1','2-2','3','3_v2','4','5','6'], f'ERROR: uc_nr is {use_case_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
+    if use_case_nr == '0' and any('base' for x in [i.name for i in os.scandir(home_path) if i.is_dir()]):
+        use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if 'base' in i.name.lower() if 'case' in i.name.lower()][0]
     else:
-        uc_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if f'case_{uc_nr}' in i.name.lower()][0]
+        use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if f'case_{use_case_nr}' in i.name.lower()][0]
     # for subsequent calculation, treat use case  3_v2 like use case 3
-    if uc_nr == '3_v2':
-        uc_nr = '3'
+    if use_case_nr == '3_v2':
+        use_case_nr = '3'
+        
     # get data frame with all houses' share renewables, which considers higher-levels' share renewables depending on the use case 
-    df_temp = get_bottom_level_df(uc_nr, uc_dir, nr_months)
+    df_temp = get_bottom_level_df(use_case_nr, use_case_dir, nr_months)
+    
     # bottom-up aggregation
     for r in range(1,7):
         # aggregate all houses to ecs
