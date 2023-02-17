@@ -375,3 +375,31 @@ def get_use_case_nr(use_case_home_path):
         uc_nr = '0'
         
     return uc_nr
+
+
+def get_use_case_dir_and_nr(home_path, use_case_nr):
+    # check use case number for validity
+    use_case_nr = str(use_case_nr)
+    assert use_case_nr in ['0','1','2','2-1','2-2','3','3_v2','4','5','6'], f'ERROR: uc_nr is {use_case_nr}, must be in [0,1,2,2-1,2-2,3,4,5,6]'
+    if use_case_nr == '0' and any('base' for x in [i.name for i in os.scandir(home_path) if i.is_dir()]):
+        use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if 'base' in i.name.lower() if 'case' in i.name.lower()][0]
+    else:
+        use_case_dir = [i.path for i in os.scandir(home_path) if i.is_dir() if f'case_{use_case_nr}' in i.name.lower()][0]
+    # treat versions of use case like original use case (3_v2 -> 3, 2-2 -> 2, etc.)
+    if '-' in use_case_nr or '_' in use_case_nr or 'v' in use_case_nr:
+        use_case_nr = use_case_nr[0]
+    
+    return use_case_dir, int(use_case_nr)
+
+
+def calculate_germany_average_trade_rate(home_path, use_case_nr):
+    # get directory path and number (int) for selected use case
+    use_case_dir, use_case_nr = get_use_case_dir_and_nr(home_path, use_case_nr)
+    
+    # calculate average houses' trade rate
+    df_houses = avg_p_houses(use_case_dir)
+    
+    # calculate germany's trade rate from average houses' trade rate
+    df_avg_germany = df_houses[[i for i in df_houses.columns if 'trade rate' in i]].mean(axis=1).mean(axis=0)
+    
+    return df_avg_germany
