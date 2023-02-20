@@ -53,7 +53,7 @@ def get_files_for_uc(uc_nr, uc_dir, nr_months, level):
             else:
                 # level == 'house': collect bottom-level entities' (house/wind/industry) filepaths
                 fpaths += [os.path.join(root,f) for f in files if any(f'region-{reg}-ec{ec}-trades.csv' in f for reg in range(1,7) for ec in range(6))]
-                fpaths += [f for f in files if any(f'region-{reg}-ec{ec}-trades.csv' in f for reg in range(1,7) for ec in range(6))]
+                fnames += [f for f in files if any(f'region-{reg}-ec{ec}-trades.csv' in f for reg in range(1,7) for ec in range(6))]
     # for each entity, there must be n files (n = nr_months)
     if len(fpaths) % nr_months != 0:
         incomplete_fnames = [i for i in fnames if fnames.count(i) != nr_months]
