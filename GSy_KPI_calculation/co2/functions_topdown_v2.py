@@ -22,9 +22,27 @@ def prepare_df_out(use_case_dir):
     for root, dir, file in os.walk(top=use_case_dir, topdown=True):
         json_filepaths += [os.path.join(root, f) for f in file if 'price_energy_day.json' in f]
     for j in json_filepaths:
+        # get current month from filepath
+        current_month_str = j.split('\\aggregated')[0].split('\\')[-1].lower()
+        # convert word to number
+        current_month_number = None
+        if 'jan' in current_month_str:
+            current_month_number = '01'
+        elif 'apr' in current_month_str:
+            current_month_number = '04'
+        elif 'jul' in current_month_str:
+            current_month_number = '07'
+        elif 'oct' in current_month_str:
+            current_month_number = '10'
+        else:
+            raise Exception(f'ERROR: Month could not be detected from string {current_month_str}.')
+        # read in timeslots
         df = pd.read_json(j)
         timeslots_j = [df['Germany']['price-energy-day'][i][0]['time'] for i in
                       range(len(df['Germany']['price-energy-day']))]
+        # replace month with detected month from filepath for in each timeslot string
+        timeslots_j = [i.split('-')[0] + '-' + current_month_number + '-' + i.split('-')[-1] for i in timeslots_j]
+        # add modified timeslots to list
         timeslots += timeslots_j
         timeslots_len.append(len(timeslots_j))
     
@@ -115,7 +133,7 @@ def get_market_maker_share_renewables(months, use_case_nr, nonempty_files_paths,
     df_mm['cs_to_mm'] = share_renewable_df_grouper(df_out, mm_df[
         (~mm_df.seller.str.contains('mm') & (mm_df.buyer.str.contains('mm')))][['energy [kWh]']])
     df_mm['mm_grey_energy [kWh]'] = df_mm['mm_to_cs'] - df_mm['cs_to_mm']
-    df_mm.loc[df_mm['mm_grey_energy [kWh]'] > 0, ['mm_grey_energy [%]']] = df_mm['mm_grey_energy [kWh]'] / df_mm[
+    df_mm.loc[df_mm['mm_grey_energy [kWh]'] > 0, ['mm_grey_energy [%]']] = df_mm['mm_grey_energy [kWh]'] / df_mm[  #TODO: error
         'mm_to_cs']
     df_mm.loc[df_mm['mm_grey_energy [kWh]'] <= 0, ['mm_grey_energy [%]']] = 0
 
