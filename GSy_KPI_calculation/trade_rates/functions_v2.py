@@ -206,9 +206,16 @@ def tot_cost_helper(use_case_home_path):
     return pd.concat(months_dfs).groupby('name', as_index=False).sum()
 
 
-def tot_cost(use_case_home_path):
+def tot_cost(path, use_case_nr=None):
+    # if no use case number is specified, assume that path is use case directory path
+    if use_case_nr is not None:
+        use_case_dir, use_case_nr = get_use_case_dir_and_nr(path, use_case_nr)
+    else:
+        use_case_dir = path
+        
     # obtain df with all agents' total costs
-    df = tot_cost_helper(use_case_home_path)
+    df = tot_cost_helper(use_case_dir)
+    
     # filter out agent category subsets and add to dict_out
     dict_out = dict()
     names = df.name
