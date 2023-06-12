@@ -94,10 +94,11 @@ def avg_p_ecs(use_case_home_path):
 
     return pd.concat(months_dfs).sort_values(by='slot')
 
-
+i_global = None
 def avg_p_houses_helper(month_subset_paths):
     dfs_temp = []
     for i in month_subset_paths:
+        i_global = i
         df_temp = pd.read_csv(i).iloc[:, np.r_[:2, -1]]
         asset_name = i.split('\\')[-1].split('.csv')[0].replace('-', '_')
         df_temp.columns = df_temp.columns.to_list()[:1] + [f'{asset_name}_' + col for col in df_temp.columns[1:]]
