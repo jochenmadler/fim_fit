@@ -94,7 +94,6 @@ def avg_p_ecs(use_case_home_path):
 
     return pd.concat(months_dfs).sort_values(by='slot')
 
-
 def avg_p_houses_helper(month_subset_paths):
     dfs_temp = []
     for i in month_subset_paths:
